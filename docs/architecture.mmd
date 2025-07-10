@@ -1,0 +1,35 @@
+---
+config:
+  theme: neo
+  look: neo
+  layout: elk
+---
+flowchart TD
+ subgraph subGraph0["Automation & Orchestration"]
+        B("Scripts: scrapy_project/")
+        K["Scripts: automation/run_pipeline.py"]
+        D("Scripts: data_processing/extract_universities.py")
+        G("Scripts: data_processing/process_to_parquet.py")
+  end
+    A["GradCafe Website"] -- Scrapy --> B
+    B -- JSONL Files --> C("Data/raw/ - Raw JSONL Files")
+    C -- Extract Unique University Names --> D
+    D -- API Calls (with Cache) --> E("API Service: University Info")
+    E -- University Lookup Data --> F("Reference/universities_lookup.jsonl")
+    C -- Read JSONL (Line by Line) --> G
+    F -- Load Lookup Data --> G
+    G -- Batch Processing (Polars) --> H("Data/processed/ - Cleaned Parquet Files")
+    H -- Direct Query / BI Tool --> I("Analysis & Dashboarding")
+    H -- Feature Engineering --> J("Model Training & Evaluation")
+    K --> B & D & G
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#bbf,stroke:#333,stroke-width:2px
+    style C fill:#ccf,stroke:#333,stroke-width:2px
+    style D fill:#ddf,stroke:#333,stroke-width:2px
+    style E fill:#eef,stroke:#333,stroke-width:2px
+    style F fill:#ffb,stroke:#333,stroke-width:2px
+    style G fill:#ccf,stroke:#333,stroke-width:2px
+    style H fill:#ddf,stroke:#333,stroke-width:2px
+    style I fill:#eef,stroke:#333,stroke-width:2px
+    style J fill:#fcf,stroke:#333,stroke-width:2px
+    style K fill:#bbf,stroke:#333,stroke-width:2px

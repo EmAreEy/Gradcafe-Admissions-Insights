@@ -1,0 +1,44 @@
+
+[project]
+name = "Gradcafe-pipeline"
+version = "0.1.0"
+description = "A pipeline for extracting, collecting, storing, and analyzing GradCafe data with insightful visualizations."
+readme = "README.md"
+requires-python = ">=3.11"
+
+# TODO: Add project dependencies here.
+dependencies = ["requests>=2.28.0", "pandas"]
+
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy"]
+
+
+[tool.ruff]
+
+line-length = 88
+target-version = "py311"
+
+
+[tool.ruff.lint]
+
+select = ["E", "F", "I", "B", "C4", "SIM", "UP"]
+
+
+# ignore = []
+
+
+unfixable = ["B008"]
+
+
+[tool.ruff.format]
+quote-style = "double"
+skip-magic-trailing-comma = false
+
+
+[tool.mypy]
+python_version = "3.11"
+
+warn_return_any = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
