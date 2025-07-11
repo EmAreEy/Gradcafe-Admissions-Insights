@@ -1,14 +1,13 @@
-import json
 import os
 import re
 import time
 from collections import Counter
-from collections.abc import Generator
 
 import requests
 from rapidfuzz import fuzz, process
 from tqdm import tqdm
 
+from utils.file_handling import load_profiles, save_jsonl, stream_jsonl
 from utils.load_config import config_loader
 from utils.logger import get_logger
 
@@ -25,11 +24,12 @@ def collect_universities_raw_names(
 ) -> None:
     raw_names_counter = Counter()
     logging.info(f"opening {path_to_raw_file} to extract universities")
-    raw_names_itr = _stream_jsonl(path_to_raw_file)
+    raw_names_itr = stream_jsonl(path_to_raw_file)
     if raw_names_itr:
         for data in raw_names_itr:
             if data["university"]:
-                raw_names_counter.update(data["university"])
+                raw_names_counter[data["university"]] += 1
+
     else:
         logging.error(
             f"raw file is empty ! or there is a problem to load it : {path_to_raw_file}"
@@ -37,40 +37,7 @@ def collect_universities_raw_names(
 
     logging.info(f"{len(raw_names_counter)} raw names collected ")
     freq_data = dict(raw_names_counter.most_common())
-    _save_jsonl(path_to_freq_file, freq_data)
-
-
-def _save_jsonl(file_path: str, data: dict, mode: str = "w") -> None:
-    logging.info(f"saving data to {file_path} ")
-    try:
-        with open(file_path, mode) as f:
-            for key, value in tqdm(data.items(), desc="writing file...", delay=5):
-                json.dump({key: value}, f, ensure_ascii=False)
-                f.write("\n")
-    except (TypeError, OSError) as e:
-        logging.error(f"Failed to write file!\n{e}")
-
-
-def _stream_jsonl(file_path: str) -> Generator | None:
-    logging.info(f"stream {file_path}")
-    try:
-        with open(file_path) as f:
-            try:
-                for line in f:
-                    yield json.loads(line)
-            except (json.JSONDecodeError, StopIteration) as e:
-                logging.warning(f"WARNING : Skipping invalid line! {e}")
-            except Exception as e:
-                logging.error(f"failed to read {file_path} : {e}")
-    except FileNotFoundError:
-        try:
-            with open(file_path, "w") as f:
-                logging.info(f"{file_path} created!")
-                return None
-        except OSError as e:
-            logging.error(f"Error while making this file :{file_path} {e}")
-    except OSError as e:
-        logging.error(f"failed to read  {file_path} Error : {e}")
+    save_jsonl(path_to_freq_file, freq_data)
 
 
 def _call_api(url: str, max_retries: int = 4, timeout: int = 10) -> dict | None:
@@ -105,23 +72,11 @@ def _get_university_info(university_name: str) -> dict | None:
     return None
 
 
-def _load_profiles(file_path: str) -> dict:
-    profiles = {}
-    data = _stream_jsonl(file_path)
-    if data:
-        for dict_line in data:
-            key = list(dict_line.keys())[0]
-            profiles[key] = dict_line.get(key)
-    else:
-        logging.error(f"{file_path} is empty!")
-    return profiles
-
-
-def _search_university(name: str, data, score_cutoff: int, scorer_method) -> str:
+def _search_university(name: str, data, score_cutoff: int, scorer_method) -> tuple:
     result = process.extract(
         name, data, score_cutoff=score_cutoff, scorer=scorer_method, limit=1
     )
-    return result[0] if result else ""
+    return result[0] if result else ()
 
 
 def _make_profile(data: dict) -> dict:
@@ -162,7 +117,7 @@ def _should_skip(name: str) -> bool:
         "anyone ",
         "interview",
         "?",
-        'hogwarts'
+        "hogwarts",
     )
     SKIP_EXACT = (
         "any",
@@ -189,23 +144,23 @@ def collect_universities_info(
     universities_map_path: str,
     failed_path: str,
 ) -> None:
-    raw_names: list[str] = list(_load_profiles(raw_names_path).keys())
-    universities_profiles: dict[str, dict] = _load_profiles(universities_profiles_path)
+    raw_names: list[str] = list(load_profiles(raw_names_path).keys())
+    universities_profiles: dict[str, dict] = load_profiles(universities_profiles_path)
     universities_profiles_keys = universities_profiles.keys()
-    universities_map: dict[str, str] = _load_profiles(universities_map_path)
+    universities_map: dict[str, str] = load_profiles(universities_map_path)
     universities_map_keys = universities_map.keys()
     failed: dict[str, int] = {}
 
     for i in tqdm(range(len(raw_names)), desc="updating universities info: "):
-        '''if (i + 1) % 50 == 0:
+        """if (i + 1) % 50 == 0:
             _save_jsonl(universities_map_path, universities_map)
             _save_jsonl(universities_profiles_path, universities_profiles)
-            _save_jsonl(failed_path, failed)'''
+            _save_jsonl(failed_path, failed)"""
 
         name = raw_names[i]
         if _should_skip(name):
             logging.info(f"SKIPPED {name}")
-            universities_map[name] = 'skipped'
+            universities_map[name] = "skipped"
             continue
 
         acronym = _find_acronym(name)
@@ -218,13 +173,12 @@ def collect_universities_info(
         elif profile_search := _search_university(
             name, universities_profiles_keys, 95, fuzz.partial_ratio
         ):
-            keys_list=list(universities_profiles_keys)
-            universities_map[name] = keys_list[keys_list.index(profile_search[0])]
+            universities_map[name] = profile_search[0]
             logging.info(f"{name} -> {profile_search} with PROFILES")
 
         elif acronym:
             acronym_search_result = _search_university(
-                name, universities_map_keys, 95, fuzz.token_set_ratio
+                acronym, universities_map_keys, 95, fuzz.token_set_ratio
             )
             if acronym_search_result:
                 universities_map[name] = universities_map[acronym_search_result[0]]
